@@ -17,6 +17,8 @@
         ['OS=="win"', {
           "sources": [
             "src/keyboard-layout-observer-windows.cc",
+            "src/notification-window.cc",
+            "src/input-language-changed-listener.cc",
           ],
           'msvs_settings': {
             'VCCLCompilerTool': {

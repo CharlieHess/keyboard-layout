@@ -1,5 +1,5 @@
 #include "keyboard-layout-observer.h"
-#include <windows.h>
+#include "input-language-changed-listener.h"
 
 using namespace v8;
 
@@ -26,14 +26,33 @@ NAN_METHOD(KeyboardLayoutObserver::New) {
   NanReturnUndefined();
 }
 
+uv_loop_t *loop = uv_default_loop();
+uv_async_t async;
+
+InputLanguageChangedListener *listener;
+
+static void asyncSendHandler(uv_async_t *handle) {
+  (static_cast<KeyboardLayoutObserver *>(handle->data))->HandleKeyboardLayoutChanged();
+}
+
+static void onInputLanguageChanged(void *observer) {
+  async.data = observer;
+  uv_async_send(&async);
+}
+
 KeyboardLayoutObserver::KeyboardLayoutObserver(NanCallback *callback) : callback(callback) {
+  uv_async_init(loop, &async, (uv_async_cb) asyncSendHandler);
+
+  listener = new InputLanguageChangedListener(this, &onInputLanguageChanged);
 }
 
 KeyboardLayoutObserver::~KeyboardLayoutObserver() {
   delete callback;
+  delete listener;
 };
 
 void KeyboardLayoutObserver::HandleKeyboardLayoutChanged() {
+  callback->Call(0, NULL);
 }
 
 NAN_METHOD(KeyboardLayoutObserver::GetCurrentKeyboardLayout) {
