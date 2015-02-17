@@ -4,19 +4,17 @@ static char classname[] = "notification msg window";
 
 static Win32NotificationWindow *gInstance = NULL;
 
-Win32NotificationWindow *Win32NotificationWindow::instance()
-{
+Win32NotificationWindow *Win32NotificationWindow::instance() {
 	if (NULL == gInstance)
 		gInstance = new Win32NotificationWindow();
 	return gInstance;
 }
 
-Win32NotificationWindow::Win32NotificationWindow() :
-	hThread(NULL),
-	hWindow(NULL),
-  listener(NULL)
-{
-	// register the window class
+Win32NotificationWindow::Win32NotificationWindow() : hWindow(NULL) {
+	HWND hWndParent = GetActiveWindow();
+	HINSTANCE hInstance = (HINSTANCE)GetWindowLong(hWndParent, GWL_HINSTANCE);
+
+	// Register the window class
 	WNDCLASSEX wcex;
 
 	wcex.cbSize = sizeof(WNDCLASSEX);
@@ -24,7 +22,7 @@ Win32NotificationWindow::Win32NotificationWindow() :
 	wcex.lpfnWndProc = Win32NotificationWindow::WndProc;
 	wcex.cbClsExtra	= 0;
 	wcex.cbWndExtra	= 0;
-	wcex.hInstance = GetModuleHandle(NULL);
+	wcex.hInstance = hInstance;
 	wcex.hIcon = 0;
 	wcex.hCursor = 0;
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
@@ -34,53 +32,50 @@ Win32NotificationWindow::Win32NotificationWindow() :
 
 	RegisterClassEx(&wcex);
 
-	// make the window
+	// Make the window
 	hWindow = CreateWindowEx(0, classname, NULL, WS_OVERLAPPEDWINDOW,
 	  CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-	  HWND_MESSAGE, NULL, GetModuleHandle(NULL), this);
-
-	if (hWindow == NULL)
-		return;
-
-	// start the thread for the window messsage loop
-	DWORD threadid;
-
-	hThread = CreateThread(NULL, 0,
-    &Win32NotificationWindow::WndThread,
-    this, 0, &threadid);
+	  HWND_MESSAGE, NULL, hInstance, this);
 }
 
-Win32NotificationWindow::~Win32NotificationWindow()
-{
-	if (hWindow)
-	{
-		PostMessage(hWindow, WM_CLOSE, 0, 0);
+void Win32NotificationWindow::RunMessageLoop() {
+	MSG message;
+	int result;
 
-		if (hThread)
-		{
-			WaitForSingleObject(hThread, 2000);
-			CloseHandle(hThread);
-		}
+	while ((result = GetMessage(&message, hWindow, 0, 0)) != 0) {
+		if (-1 == result)
+			break;
+
+		TranslateMessage(&message);
+		DispatchMessage(&message);
 	}
 }
 
-LRESULT CALLBACK Win32NotificationWindow::HandleMessage
-(
-	UINT uMsg,
-	WPARAM wParam,
-	LPARAM lParam
-)
-{
-	if (listener != NULL)
-	{
-    listener->Win32MessageReceived(uMsg, wParam, lParam);
+void Win32NotificationWindow::SetObserver(KeyboardLayoutObserver *obs) {
+	observer = obs;
+}
+
+void Win32NotificationWindow::ClearObserver() {
+	observer = NULL;
+}
+
+Win32NotificationWindow::~Win32NotificationWindow() {
+	if (hWindow) {
+		PostMessage(hWindow, WM_CLOSE, 0, 0);
+	}
+}
+
+LRESULT CALLBACK Win32NotificationWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	if (observer != NULL) {
+		uv_async_t async = observer->getAsyncHandle();
+		async.data = observer;
+		uv_async_send(&async);
 	}
 
  	return DefWindowProc(hWindow, uMsg, wParam, lParam);
 }
 
-LRESULT CALLBACK Win32NotificationWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
+LRESULT CALLBACK Win32NotificationWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	Win32NotificationWindow *self;
 	if (uMsg == WM_NCCREATE) {
 		LPCREATESTRUCT lpcs = reinterpret_cast<LPCREATESTRUCT>(lParam);
@@ -95,35 +90,4 @@ LRESULT CALLBACK Win32NotificationWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM w
 	} else {
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
-}
-
-DWORD WINAPI Win32NotificationWindow::WndThread(LPVOID context)
-{
-	MSG Msg;
-	Win32NotificationWindow *that;
-	int rval;
-
-	that = (Win32NotificationWindow *) context;
-
-	// listen to the message loop
-	while ((rval = GetMessage(&Msg, that->hWindow, 0, 0)) != 0)
-	{
-		if (-1 == rval)
-			return 0;
-
-		TranslateMessage(&Msg);
-		DispatchMessage(&Msg);
-	}
-
-	return (DWORD) Msg.wParam;
-}
-
-void Win32NotificationWindow::setListener(Win32MessageListener *wml)
-{
-  listener = wml;
-}
-
-void Win32NotificationWindow::clearListener()
-{
-	listener = NULL;
 }

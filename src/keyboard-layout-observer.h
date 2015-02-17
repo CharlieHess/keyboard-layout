@@ -10,6 +10,10 @@ class KeyboardLayoutObserver : public node::ObjectWrap {
   static void Init(Handle<Object> target);
   void HandleKeyboardLayoutChanged();
 
+  uv_async_t getAsyncHandle() {
+    return async;
+  }
+
  private:
   KeyboardLayoutObserver(NanCallback *callback);
   ~KeyboardLayoutObserver();
@@ -17,6 +21,7 @@ class KeyboardLayoutObserver : public node::ObjectWrap {
   static NAN_METHOD(GetCurrentKeyboardLayout);
 
   NanCallback *callback;
+  uv_async_t async;
 };
 
 #endif  // SRC_KEYBORD_LAYOUT_OBSERVER_H_

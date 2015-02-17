@@ -1,5 +1,5 @@
 #include "keyboard-layout-observer.h"
-#include "input-language-changed-listener.h"
+#include "notification-window.h"
 
 using namespace v8;
 
@@ -27,29 +27,30 @@ NAN_METHOD(KeyboardLayoutObserver::New) {
 }
 
 uv_loop_t *loop = uv_default_loop();
-uv_async_t async;
-
-InputLanguageChangedListener *listener;
+uv_thread_t window_thread_id;
 
 static void asyncSendHandler(uv_async_t *handle) {
   (static_cast<KeyboardLayoutObserver *>(handle->data))->HandleKeyboardLayoutChanged();
 }
 
-static void onInputLanguageChanged(void *observer) {
-  async.data = observer;
-  uv_async_send(&async);
+static void windowThread(void *arg) {
+  KeyboardLayoutObserver *observer = static_cast<KeyboardLayoutObserver *>(arg);
+
+  uv_async_t async = observer->getAsyncHandle();
+  uv_async_init(loop, &async, (uv_async_cb) asyncSendHandler);
+
+  Win32NotificationWindow::instance()->SetObserver(observer);
+  Win32NotificationWindow::instance()->RunMessageLoop();
 }
 
 KeyboardLayoutObserver::KeyboardLayoutObserver(NanCallback *callback) : callback(callback) {
-  uv_async_init(loop, &async, (uv_async_cb) asyncSendHandler);
-
-  listener = new InputLanguageChangedListener(this, &onInputLanguageChanged);
+  uv_thread_create(&window_thread_id, windowThread, this);
 }
 
 KeyboardLayoutObserver::~KeyboardLayoutObserver() {
+  Win32NotificationWindow::instance()->ClearObserver();
   delete callback;
-  delete listener;
-};
+}
 
 void KeyboardLayoutObserver::HandleKeyboardLayoutChanged() {
   callback->Call(0, NULL);
