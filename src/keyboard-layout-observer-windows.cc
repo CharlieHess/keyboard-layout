@@ -26,20 +26,12 @@ NAN_METHOD(KeyboardLayoutObserver::New) {
   NanReturnUndefined();
 }
 
-uv_loop_t *loop = uv_default_loop();
 uv_thread_t window_thread_id;
-
-static void asyncSendHandler(uv_async_t *handle) {
-  (static_cast<KeyboardLayoutObserver *>(handle->data))->HandleKeyboardLayoutChanged();
-}
 
 static void windowThread(void *arg) {
   KeyboardLayoutObserver *observer = static_cast<KeyboardLayoutObserver *>(arg);
 
-  uv_async_t async = observer->getAsyncHandle();
-  uv_async_init(loop, &async, (uv_async_cb) asyncSendHandler);
-
-  Win32NotificationWindow::instance()->SetObserver(observer);
+  Win32NotificationWindow::instance()->Initialize(observer);
   Win32NotificationWindow::instance()->RunMessageLoop();
 }
 
@@ -48,7 +40,7 @@ KeyboardLayoutObserver::KeyboardLayoutObserver(NanCallback *callback) : callback
 }
 
 KeyboardLayoutObserver::~KeyboardLayoutObserver() {
-  Win32NotificationWindow::instance()->ClearObserver();
+  Win32NotificationWindow::instance()->CleanUp();
   delete callback;
 }
 

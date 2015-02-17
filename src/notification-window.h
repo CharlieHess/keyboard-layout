@@ -4,6 +4,11 @@
 #include <windows.h>
 #include "keyboard-layout-observer.h"
 
+struct MessageData {
+	UINT message;
+	KeyboardLayoutObserver *observer;
+};
+
 class Win32NotificationWindow {
 public:
 	static Win32NotificationWindow *instance();
@@ -13,9 +18,9 @@ public:
 		return hWindow;
 	}
 
+	void Initialize(KeyboardLayoutObserver *observer);
 	void RunMessageLoop();
-	void SetObserver(KeyboardLayoutObserver *observer);
-	void ClearObserver();
+	void CleanUp();
 
 protected:
 	Win32NotificationWindow();

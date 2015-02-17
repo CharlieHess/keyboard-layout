@@ -1,5 +1,8 @@
 #include "notification-window.h"
 
+#include <iostream>
+using namespace std;
+
 static char classname[] = "notification msg window";
 
 static Win32NotificationWindow *gInstance = NULL;
@@ -51,11 +54,24 @@ void Win32NotificationWindow::RunMessageLoop() {
 	}
 }
 
-void Win32NotificationWindow::SetObserver(KeyboardLayoutObserver *obs) {
-	observer = obs;
+uv_loop_t *loop = uv_default_loop();
+uv_async_t async;
+
+static void asyncSendHandler(uv_async_t *handle) {
+	MessageData *data = static_cast<MessageData *>(handle->data);
+
+	cout << "Received window message: " << data->message;
+
+	if (data->message == WM_INPUTLANGCHANGE)
+		data->observer->HandleKeyboardLayoutChanged();
 }
 
-void Win32NotificationWindow::ClearObserver() {
+void Win32NotificationWindow::Initialize(KeyboardLayoutObserver *obs) {
+	observer = obs;
+	uv_async_init(loop, &async, (uv_async_cb) asyncSendHandler);
+}
+
+void Win32NotificationWindow::CleanUp() {
 	observer = NULL;
 }
 
@@ -67,8 +83,8 @@ Win32NotificationWindow::~Win32NotificationWindow() {
 
 LRESULT CALLBACK Win32NotificationWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	if (observer != NULL) {
-		uv_async_t async = observer->getAsyncHandle();
-		async.data = observer;
+		MessageData data = { uMsg, observer };
+		async.data = &data;
 		uv_async_send(&async);
 	}
 
