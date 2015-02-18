@@ -4,10 +4,7 @@
 #include <windows.h>
 #include "keyboard-layout-observer.h"
 
-struct MessageData {
-	UINT message;
-	KeyboardLayoutObserver *observer;
-};
+typedef void (*WmCallback) (UINT msg, WPARAM wParam, LPARAM lParam);
 
 class Win32NotificationWindow {
 public:
@@ -18,7 +15,7 @@ public:
 		return hWindow;
 	}
 
-	void Initialize(KeyboardLayoutObserver *observer);
+	void Initialize(WmCallback cb);
 	void RunMessageLoop();
 	void CleanUp();
 
@@ -32,5 +29,5 @@ protected:
   	LPARAM lParam);
 
 	HWND hWindow;
-	KeyboardLayoutObserver *observer;
+	WmCallback callback;
 };

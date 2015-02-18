@@ -13,7 +13,7 @@ Win32NotificationWindow *Win32NotificationWindow::instance() {
 	return gInstance;
 }
 
-Win32NotificationWindow::Win32NotificationWindow() : hWindow(NULL) {
+Win32NotificationWindow::Win32NotificationWindow() : hWindow(NULL), callback(NULL) {
 	HWND hWndParent = GetActiveWindow();
 	HINSTANCE hInstance = (HINSTANCE)GetWindowLong(hWndParent, GWL_HINSTANCE);
 
@@ -37,11 +37,15 @@ Win32NotificationWindow::Win32NotificationWindow() : hWindow(NULL) {
 
 	// Make the window
 	hWindow = CreateWindowEx(0, classname, NULL, WS_OVERLAPPEDWINDOW,
-	  CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-	  HWND_MESSAGE, NULL, hInstance, this);
+	  CW_USEDEFAULT, CW_USEDEFAULT, 200, 200,
+	  NULL, NULL, hInstance, this);
+
+	ShowWindow(hWindow, SW_SHOW);
 }
 
 void Win32NotificationWindow::RunMessageLoop() {
+	ShowWindow(hWindow, SW_SHOW);
+
 	MSG message;
 	int result;
 
@@ -54,41 +58,26 @@ void Win32NotificationWindow::RunMessageLoop() {
 	}
 }
 
-uv_loop_t *loop = uv_default_loop();
-uv_async_t async;
-
-static void asyncSendHandler(uv_async_t *handle) {
-	MessageData *data = static_cast<MessageData *>(handle->data);
-
-	cout << "Received window message: " << data->message;
-
-	if (data->message == WM_INPUTLANGCHANGE)
-		data->observer->HandleKeyboardLayoutChanged();
-}
-
-void Win32NotificationWindow::Initialize(KeyboardLayoutObserver *obs) {
-	observer = obs;
-	uv_async_init(loop, &async, (uv_async_cb) asyncSendHandler);
+void Win32NotificationWindow::Initialize(WmCallback cb) {
+	callback = cb;
 }
 
 void Win32NotificationWindow::CleanUp() {
-	observer = NULL;
+	callback = NULL;
+}
+
+LRESULT CALLBACK Win32NotificationWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	if (callback != NULL) {
+		callback(uMsg, wParam, lParam);
+	}
+
+ 	return DefWindowProc(hWindow, uMsg, wParam, lParam);
 }
 
 Win32NotificationWindow::~Win32NotificationWindow() {
 	if (hWindow) {
 		PostMessage(hWindow, WM_CLOSE, 0, 0);
 	}
-}
-
-LRESULT CALLBACK Win32NotificationWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	if (observer != NULL) {
-		MessageData data = { uMsg, observer };
-		async.data = &data;
-		uv_async_send(&async);
-	}
-
- 	return DefWindowProc(hWindow, uMsg, wParam, lParam);
 }
 
 LRESULT CALLBACK Win32NotificationWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
